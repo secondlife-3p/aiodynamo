@@ -5,6 +5,7 @@ import asyncio
 import configparser
 import datetime
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -393,6 +394,7 @@ class ContainerMetadataCredentials(MetadataCredentials):
             request=Request(
                 method="GET", url=str(self.url), headers=headers, body=None
             ),
+            backoff_wait=2.0,
         )
         data = json.loads(response)
         return Metadata(
@@ -582,9 +584,15 @@ async def fetch_with_retry_and_timeout(
     max_attempts: int,
     timeout: Timeout,
     request: Request,
+    backoff_wait: float = 0.0,
+    backoff_max_time: float = 60.0,
 ) -> bytes:
     exception: Optional[Exception] = None
+    backoff = 0.0
     for _ in range(max_attempts):
+        if backoff_wait:
+            await asyncio.sleep(backoff)
+            backoff = min(math.pow(backoff_wait, 2), backoff_max_time)
         try:
             response = await asyncio.wait_for(http(request), timeout)
         except asyncio.TimeoutError:
